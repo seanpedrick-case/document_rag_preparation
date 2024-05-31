@@ -9,8 +9,8 @@ spacy.prefer_gpu()
 
 def spacy_model_installed(model_name):
     try:
-        import en_core_web_sm
-        en_core_web_sm.load()
+        import en_core_web_lg
+        en_core_web_lg.load()
         print("Successfully imported spaCy model")
         #nlp = spacy.load("en_core_web_sm")
         #print(nlp._path)
@@ -23,7 +23,7 @@ def spacy_model_installed(model_name):
 
 #if not is_model_installed(model_name):
 #    os.system(f"python -m spacy download {model_name}")
-model_name = "en_core_web_sm"
+model_name = "en_core_web_lg"
 spacy_model_installed(model_name)
 
 #spacy.load(model_name)
