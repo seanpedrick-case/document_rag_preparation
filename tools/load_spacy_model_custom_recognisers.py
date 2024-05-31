@@ -8,7 +8,7 @@ from spacy.cli.download import download
 import re
 
 # %%
-model_name = "en_core_web_sm" #"en_core_web_trf"
+model_name = "en_core_web_lg" #"en_core_web_trf"
 score_threshold = 0.001
 
 # %% [markdown]
