@@ -1,0 +1,20 @@
+pandas==2.2.2
+spacy # Not specified as latest versions create a conflict with latest versions of gradio
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1.tar.gz
+gradio # Not specified as latest versions create a conflict with latest versions of spacy
+boto3==1.34.103
+unstructured
+unstructured[pdf]
+unstructured[docx]
+unstructured[pptx]
+unstructured[html]
+unstructured[text]
+unstructured[xlsx]
+unstructured[odt]
+unstructured[jpg]
+unstructured[msg]
+Faker==22.2.0
+presidio_analyzer==2.2.351
+presidio_anonymizer==2.2.351
+polars==0.20.6
+
