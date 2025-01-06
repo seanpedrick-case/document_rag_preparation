@@ -26,7 +26,7 @@ html_pattern_regex = r'<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});|\xa0|&nbs
 html_start_pattern_end_dots_regex = r'<(.*?)\.\.'
 email_pattern_regex = r'\S*@\S*\s?'
 num_pattern_regex = r'[0-9]+'
-nums_two_more_regex = r'\b[0-9]{2,}\b|\b[0-9]+\s[0-9]+\b'
+nums_two_more_regex = r'\b\d+[\.|\,]\d+\b|\b[0-9]{2,}\b|\b[0-9]+\s[0-9]+\b' # Should match two digit numbers or more, and also if there are full stops or commas in between
 postcode_pattern_regex = r'(\b(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]? ?[0-9][A-Z]{2})|((GIR ?0A{2})\b$)|(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]? ?[0-9]{1}?)$)|(\b(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]?)\b$)'
 multiple_spaces_regex = r'\s{2,}'
 
@@ -57,13 +57,17 @@ def pre_clean(data:List[Element], in_colnames:str, custom_regex:List[str], clean
         print("Starting data clean.")
 
         for element in data:
-            if not custom_regex.empty:
-                cleaned_data = initial_clean([element.text], custom_regex.iloc[:, 0].to_list())
+            if hasattr(element, 'text'):  # Check if 'element' has 'text' attribute
+                if len(element.text) > 0:
+                    if not custom_regex.empty:
+                        cleaned_data = initial_clean([element.text], custom_regex.iloc[:, 0].to_list())
+                    else:
+                        cleaned_data = initial_clean([element.text], [])
+                    
+                    element.text = cleaned_data[0]
+                    print(element.text)
             else:
-                cleaned_data = initial_clean([element.text], [])
-
-            element.text = cleaned_data[0]
-            print(element.text)
+                continue  # Skip elements without 'text'
 
         clean_toc = time.perf_counter()
         clean_time_out = f"Cleaning the text took {clean_toc - clean_tic:0.1f} seconds."
@@ -110,6 +114,12 @@ def initial_clean(texts, custom_regex, progress=gr.Progress()):
     #text = text.str.replace_all(nums_two_more_regex, ' ')
     #text = text.str.replace_all(postcode_pattern_regex, ' ')
 
+    print(texts)
+
+    if not texts:
+        print("The 'texts' argument is empty.")
+        return texts
+
     texts = pl.Series(texts)
 
     # Allow for custom regex patterns to be removed
@@ -117,7 +127,7 @@ def initial_clean(texts, custom_regex, progress=gr.Progress()):
         for pattern in custom_regex:
             raw_string_pattern = rf"{pattern}"  # Case-insensitive regex
             #print(f"Removing regex pattern: {raw_string_pattern}")
-            text = text.str.replace_all(raw_string_pattern, " ")
+            text = texts.str.replace_all(raw_string_pattern, " ")
             #print("Text without pattern: ", text[0])
     
 
