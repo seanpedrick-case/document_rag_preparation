@@ -1,7 +1,7 @@
 from spacy.cli import download
 import spacy
 from tools.presidio_analyzer_custom import analyze_dict
-from tools.load_spacy_model_custom_recognisers import nlp_analyser
+#from tools.load_spacy_model_custom_recognisers import nlp_analyser
 from typing import List
 from unstructured.documents.elements import Element
 

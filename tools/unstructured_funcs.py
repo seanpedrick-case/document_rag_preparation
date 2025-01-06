@@ -173,8 +173,29 @@ def add_parent_title_to_meta(elements:List[Element], chapter_ids:List[str], excl
 
     return elements
 
+# %%
+def group_by_filename(
+    elements: List[Element], 
+    meta_keys: List[str] = ['filename']
+) -> List[List[Element]]:
+    '''
+    Identify elements with the same filename and return them
+    '''
+    grouped_elements = {}  # Dictionary to hold lists of elements by filename
 
-def chunk_all_elements(elements:List[Element], file_name_base:str, chunk_type:str = "Basic_chunking",  minimum_chunk_length:int=minimum_chunk_length, start_new_chunk_after_end_of_this_element_length:int=start_new_chunk_after_end_of_this_element_length, hard_max_character_length_chunks:int=hard_max_character_length_chunks, multipage_sections:bool=multipage_sections, overlap_all:bool=overlap_all, include_orig_elements:bool=include_orig_elements):
+    for element in elements:
+        for key in meta_keys:
+            try:
+                current_file = element.metadata.__dict__[key]  # Get the filename
+                if current_file not in grouped_elements:
+                    grouped_elements[current_file] = []  # Initialize list for this filename
+                grouped_elements[current_file].append(element)  # Add element to the list
+            except KeyError:
+                print(f"Key '{key}' not found in element metadata.")
+
+    return list(grouped_elements.values())  # Return the grouped elements as a list of lists
+
+def chunk_all_elements(elements:List[Element], file_name_base:str, chunk_type:str = "Basic_chunking",  minimum_chunk_length:int=minimum_chunk_length, start_new_chunk_after_end_of_this_element_length:int=start_new_chunk_after_end_of_this_element_length, hard_max_character_length_chunks:int=hard_max_character_length_chunks, multipage_sections:bool=multipage_sections, overlap_all:bool=overlap_all, chunk_within_docs:str="Yes", include_orig_elements:bool=include_orig_elements):
 
     '''
     Use Unstructured.io functions to chunk an Element object by Title or across all elements.
@@ -186,33 +207,44 @@ def chunk_all_elements(elements:List[Element], file_name_base:str, chunk_type:st
     
     ### Break text down into chunks
 
+    all_chunks = []
+
+    #### If chunking within docs, then provide a list of list of elements, with each sublist being a separate document. Else, provide a list of lists of length 1
+
+    if chunk_within_docs == "No": elements = [elements]
+    else: elements = group_by_filename(elements)
+
     try:
+        for element_group in elements:
+            if chunk_type == "Chunk within title":
+                chunks = chunk_by_title(
+                    element_group,
+                    include_orig_elements=include_orig_elements,
+                    combine_text_under_n_chars=minimum_chunk_length,
+                    new_after_n_chars=start_new_chunk_after_end_of_this_element_length,
+                    max_characters=hard_max_character_length_chunks,
+                    multipage_sections=multipage_sections,
+                    overlap_all=overlap_all
+                )
 
-        if chunk_type == "Chunk within title":
-            chunks = chunk_by_title(
-                elements,
-                include_orig_elements=include_orig_elements,
-                combine_text_under_n_chars=minimum_chunk_length,
-                new_after_n_chars=start_new_chunk_after_end_of_this_element_length,
-                max_characters=hard_max_character_length_chunks,
-                multipage_sections=multipage_sections,
-                overlap_all=overlap_all
-            )
+            elif chunk_type == "Basic chunking":
+                chunks = chunk_elements(
+                    element_group,
+                    include_orig_elements=include_orig_elements,
+                    new_after_n_chars=start_new_chunk_after_end_of_this_element_length,
+                    max_characters=hard_max_character_length_chunks,
+                    overlap_all=overlap_all
+                )
 
-        else:
-            chunks = chunk_elements(
-                elements,
-                include_orig_elements=include_orig_elements,
-                new_after_n_chars=start_new_chunk_after_end_of_this_element_length,
-                max_characters=hard_max_character_length_chunks,
-                overlap_all=overlap_all
-            )
+            all_chunks.extend(chunks)
     
     except Exception as output_summary:
         print(output_summary)
         return output_summary, output_files, file_name_base
+    
+    # print("all_chunks:", all_chunks)
 
-    chunk_sections, chunk_df, chunks_out = element_chunks_to_document(chunks, chapter_ids)
+    chunk_sections, chunk_df, chunks_out = element_chunks_to_document(all_chunks, chapter_ids)
 
     file_name_suffix = "_chunk"
 
@@ -315,9 +347,6 @@ def write_elements_to_documents(elements:List[Element]):
 
         element_doc = [Document(page_content=element.text, metadata= meta)]
         doc_sections.extend(element_doc)
-
-        #print("Doc format: ", doc_sections)
-
 
     return doc_sections
 
@@ -434,9 +463,7 @@ def export_elements_as_table_to_file(elements:List[Element], file_name_base:str,
     if chunk_documents:
         out_documents = chunk_documents
     else:
-        out_documents = write_elements_to_documents(elements)
-
-    
+        out_documents = write_elements_to_documents(elements)    
 
     out_file_name_docs = "output/" + out_file_name_base + "_docs.pkl.gz"
     with gzip.open(out_file_name_docs, 'wb') as file:
@@ -529,356 +556,3 @@ def modify_metadata_elements(elements_out_cleaned:List[Element], meta_keys_to_fi
     elements_out_filtered_meta_mod = filter_elements(elements_out_meta_mod_meta_filt, element_types_to_filter)
 
     return elements_out_filtered_meta_mod
-# %%
-# file_stub = "C:/Users/SPedrickCase/OneDrive - Lambeth Council/Apps/doc_rag_prep/examples/"
-# filenames = []
-# pdf_filename = [file_stub + "Lambeth_2030-Our_Future_Our_Lambeth_foreword.pdf"]
-# filenames.extend(pdf_filename)
-
-# html_filename = [file_stub + "transport-strategy.html"]
-# filenames.extend(html_filename)
-
-# docx_filename = [file_stub + "FINAL Policy and Procedure for Writing Housing Policies.docx"]
-# filenames.extend(docx_filename)
-
-# out_message, elements_parse = partition_file(filenames=filenames, pdf_partition_strat="ocr_only")
-
-# for element in elements_parse[:10]:
-#     print(f"{element.category.upper()}: {element.text} - Metadata: {element.metadata.to_dict()}")
-#     elements_out = elements_parse.copy()
-
-# %% [markdown]
-# ###  Process with document layout detection - fast strategy
-# 
-# The "fast" strategy will extract the text using pdfminer and process the raw text with partition_text. If the PDF text is not extractable, partition_pdf will fall back to "ocr_only". We recommend using the "fast" strategy in most cases where the PDF has extractable text.
-# elements_out_parse = partition_pdf(filename=filename, strategy="fast")
-# for element in elements_out_parse[:10]:
-#     print(f"{element.category.upper()}: {element.text} - Metadata: {element.metadata.to_dict()}")
-#  elements_out = elements_out_parse.copy()
-# ### OCR only
-# 
-# The "ocr_only" strategy runs the document through Tesseract for OCR and then runs the raw text through partition_text. Currently, "hi_res" has difficulty ordering elements for documents with multiple columns. If you have a document with multiple columns that does not have extractable text, we recommend using the "ocr_only" strategy. "ocr_only" falls back to "fast" if Tesseract is not available and the document has extractable text.
-#  elements_out_parse = partition_pdf(filename=filename, strategy="ocr_only")
-#  for element in elements_out_parse[:10]:
-#     print(f"{element.category.upper()}: {element.text} - Metadata: {element.metadata.to_dict()}")
-#     elements_out = elements_out_parse.copy()
-# ### Hi-res partitioning
-# 
-# The "hi_res" strategy will identify the layout of the document using detectron2. The advantage of “hi_res” is that it uses the document layout to gain additional information about document elements. We recommend using this strategy if your use case is highly sensitive to correct classifications for document elements. If detectron2 is not available, the "hi_res" strategy will fall back to the "ocr_only" strategy.
-# elements_out = partition_pdf(filename=filename, strategy="hi_res")
-# for element in elements_out[:10]:
-#     print(f"{element.category.upper()}: {element.text} - Metadata: {element.metadata.to_dict()}")
-
-# %% [markdown]
-# ## Clean data
-
-# %%
-# elements_out_cleaned = clean_elements(elements_out.copy(), bytes_to_string=False,
-# replace_quotes=True ,
-# clean_non_ascii=False, 
-# clean_ordered_list=True ,
-# group_paragraphs=True,
-# trailing_punctuation=False,
-# all_punctuation=False,
-# clean_text=True ,
-# extra_whitespace=True, 
-# dashes=True ,
-# bullets=True ,
-# lowercase=False)
-
-# %% [markdown]
-# ## Add/remove elements to/from metadata
-
-
-
-# %% [markdown]
-# ### Write to table, dictionary, document format
-
-# %%
-### Dataframe format
-
-# elements_out_filtered_df = convert_to_dataframe(elements_out_filtered_meta_mod)
-
-# elements_out_filtered_df.to_csv("table.csv")
-# elements_out_filtered_df.head(6)
-
-# # %%
-# ### Dictionary format
-
-# elements_out_filtered_dict = convert_to_dict(elements_out_filtered_meta_mod)
-# elements_out_filtered_dict[20]
-
-# # %% [markdown]
-# # ### Document format for embeddings
-
-# # %%
-# doc_sections = write_elements_to_documents(elements_out_filtered_meta_mod, element_types_to_filter)
-
-# doc_sections[0:10]
-
-# # %% [markdown]
-# # ### Break text down into chunks
-
-# # %%
-# chunks_by_title = chunk_by_title(
-#     elements_out_filtered_meta_mod,
-#     include_orig_elements=True,
-#     combine_text_under_n_chars=minimum_chunk_length,
-#     new_after_n_chars=start_new_chunk_after_end_of_this_element_length,
-#     max_characters=hard_max_character_length_chunks,
-#     multipage_sections=True,
-#     overlap_all=True
-# )
-
-# chunk_sections, chunk_df = element_chunks_to_document(chunks_by_title, chapter_ids)
-# chunk_df.to_csv("chunked_df.csv")
-# print(chunk_sections[2])
-
-# # %%
-# chunks_basic = chunk_elements(
-#     elements_out_filtered_meta_mod,
-#     include_orig_elements=True,
-#     new_after_n_chars=start_new_chunk_after_end_of_this_element_length,
-#     max_characters=hard_max_character_length_chunks,
-#     overlap_all=True
-# )
-
-# chunk_basic_sections, chunk_basic_df = element_chunks_to_document(chunks_basic, chapter_ids)
-# chunk_basic_df.to_csv("chunked_basic_df.csv")
-
-# %% [markdown]
-# # Partition Word document
-# 
-# You cannot get location metadata for bounding boxes from word documents
-
-# %%
-# word_filename = "../examples/FINAL Policy and Procedure for Writing Housing Policies.docx"
-
-# # %%
-# docx_elements = partition(filename=word_filename)
-# for element in docx_elements:
-#     print(f"{element.category.upper()}: {element.text} - Metadata: {element.metadata.to_dict()}")
-
-# # %%
-# docx_elements[5].text
-
-# # %%
-# docx_elements[5].category
-
-# # %%
-# docx_elements[5].metadata.to_dict()
-
-# # %% [markdown]
-# # ## Find elements associated with chapters
-
-# # %%
-# chapter_ids, chapter_to_id = create_title_id_dict(docx_elements)
-
-# chapter_ids
-
-# # %%
-# doc_sections = write_elements_to_documents(docx_elements.copy(), chapter_ids)
-
-# # %%
-# doc_sections
-
-# # %% [markdown]
-# # ### Chunk documents
-
-# # %%
-# chunks = chunk_by_title(
-#     docx_elements,
-#     include_orig_elements=False,
-#     combine_text_under_n_chars=0,
-#     new_after_n_chars=500,
-#     max_characters=1000,
-#     multipage_sections=True,
-#     overlap_all=True
-# )
-
-# # %%
-# print(chunks)
-
-# # %%
-# chunk_sections = element_chunks_to_document(chunks.copy(), docx_elements.copy(), chapter_ids)
-
-# # %%
-# chunk_sections[5].page_content
-
-# # %%
-# chunk_sections[5].metadata["true_element_ids"]
-
-# # %%
-# for element in docx_elements:
-#     if element._element_id in chunk_sections[5].metadata["true_element_ids"]:
-#         print(element.text)
-
-# # %% [markdown]
-# # # Partition PPTX document
-
-# # %%
-# pptx_filename = "../examples/LOTI presentation Jan 2024.pptx"
-
-# # %%
-# pptx_elements = partition(filename=pptx_filename)
-# for element in pptx_elements[:10]:
-#     print(f"{element.category.upper()}: {element.text} - Metadata: {element.metadata.to_dict()}")
-
-# # %%
-# chapter_ids, chapter_to_id = create_title_id_dict(pptx_elements)
-# chapter_ids
-
-# # %%
-# pptx_sections = write_elements_to_documents(pptx_elements.copy(), chapter_ids)
-
-# # %%
-# pptx_sections
-
-# # %%
-# pptx_chunks = chunk_by_title(
-#     pptx_elements,
-#     include_orig_elements=False,
-#     combine_text_under_n_chars=0,
-#     new_after_n_chars=500,
-#     max_characters=1000,
-#     multipage_sections=True,
-#     overlap_all=True
-# )
-
-# # %%
-# pptx_chunk_sections = element_chunks_to_document(pptx_chunks.copy(), pptx_elements.copy(), chapter_ids)
-
-# # %% [markdown]
-# # ### Load documents into a vectorDB (Not necessary)
-
-# # %%
-# import chromadb
-
-# # %%
-# client = chromadb.PersistentClient(path="chroma_tmp", settings=chromadb.Settings(allow_reset=True))
-# client.reset()
-
-# # %%
-# collection = client.create_collection(
-#     name="policy_statements",
-#     metadata={"hnsw:space": "cosine"}
-# )
-
-# # %%
-# chapter_ids
-
-# # %%
-# for element in docx_elements:
-#     parent_id = element.metadata.parent_id
-#     #print(element.text)
-#     #print(parent_id)
-#     #print(element.metadata.to_dict())
-#     if parent_id:
-#         try:
-#             print(parent_id)
-#             chapter = chapter_ids[parent_id]
-#             print(chapter)
-#         except KeyError:
-#             chapter = "None"
-#     else:
-#         chapter = "None"
-#     collection.add(
-#         documents=[element.text],
-#         ids=[element._element_id],
-#         metadatas=[{"chapter": chapter}]
-#     )
-
-# # %% [markdown]
-# # #### See the elements in the VectorDB and perform hybrid search
-
-# # %%
-# results = collection.peek()
-# print(results["documents"])
-
-# # %%
-# print(collection.metadata)
-
-# # %%
-# import json
-
-# result = collection.query(
-#     query_texts=["What should policies do?"],
-#     n_results=2,
-#     where={"chapter": '3.0  Policy Statements'},
-# )
-# print(json.dumps(result, indent=2))
-
-# # %%
-# collection = client.create_collection(
-#     name="policy_statements_chunk",
-#     metadata={"hnsw:space": "cosine"}
-# )
-
-# # %%
-# for element in chunks:
-#     parent_id = element.metadata.parent_id
-#     #print(element.text)
-#     #print(parent_id)
-#     #print(element.metadata.to_dict())
-#     if parent_id:
-#         try:
-#             print(parent_id)
-#             chapter = chapter_ids[parent_id]
-#             print(chapter)
-#         except KeyError:
-#             chapter = "None"
-#     else:
-#         chapter = "None"
-
-#     print(element._element_id)
-#     collection.add(
-#         documents=[element.text],
-#         ids=[element.orig_elements],
-#         metadatas=[{"chapter": chapter}]
-#     )
-
-# # %% [markdown]
-# # # Partition HTML
-
-# # %%
-# html_filename = "../examples/transport-strategy.html"
-
-# # %%
-# html_elements = partition(filename=html_filename)
-# for element in html_elements[:10]:
-#     print(f"{element.category.upper()}: {element.text} - Metadata: {element.metadata.to_dict()}")
-
-# # %% [markdown]
-# # # Partition image
-
-# # %%
-# img_filename = "../examples/example_complaint_letter.jpg"
-
-# # %%
-# img_elements = partition(filename=img_filename)
-# for element in img_elements[:10]:
-#     print(f"{element.category.upper()}: {element.text} - Metadata: {element.metadata.to_dict()}")
-
-# # %% [markdown]
-# # # Partition XLSX
-
-# # %%
-# xlsx_filename = "../examples/fuel-poverty-sub-regional-tables-2020-2018-data.xlsx"
-
-# # %%
-# xlsx_elements = partition(filename=xlsx_filename)
-# for element in xlsx_elements[:10]:
-#     print(f"{element.category.upper()}: {element.text} - Metadata: {element.metadata.to_dict()}")
-
-# # %% [markdown]
-# # # Partition .py
-
-# # %%
-# py_filename = "../examples/app.py"
-
-# # %%
-# py_elements = partition(filename=py_filename)
-# for element in py_elements[:10]:
-#     print(f"{element.category.upper()}: {element.text} - Metadata: {element.metadata.to_dict()}")
-
-

@@ -25,6 +25,8 @@ language = 'en'
 default_meta_keys_to_filter=["file_directory", "filetype"]
 default_element_types_to_filter = ['UncategorizedText', 'Header']
 
+max_chunk_length = 25000 # characters
+
 
 def get_element_metadata(elements, prefix=""):
     """Recursively retrieves element names and metadata in the desired format."""
@@ -117,7 +119,7 @@ with block:
                 element_types_to_filter = gr.Dropdown(value=default_element_types_to_filter, choices=default_element_types_to_filter, multiselect=True, interactive=True, label = "Choose element types to exclude from element list")
                 meta_keys_to_filter = gr.Dropdown(value=default_meta_keys_to_filter, choices=default_meta_keys_to_filter, multiselect=True, interactive=True, label = "Choose metadata keys to filter out")                
 
-                filter_meta_btn = gr.Button("Filter elements/metadata")
+                filter_meta_btn = gr.Button("Filter elements/metadata", variant='primary')
 
             with gr.Accordion("Clean/anonymise text", open = False):
                 with gr.Row():
@@ -140,19 +142,20 @@ with block:
                         anon_strat = gr.Dropdown(value = "redact", choices=["redact", "replace"], multiselect=False, label="Anonymisation strategy. Choose from redact (simply remove text), or replace with entity type (e.g. <PERSON>)")
                         anon_entities_drop = gr.Dropdown(value=chosen_redact_entities, choices=full_entity_list, multiselect=True, label="Choose entities to find and anonymise in your open text")                        
 
-                unstructured_clean_btn = gr.Button("Clean data")       
+                unstructured_clean_btn = gr.Button("Clean data", variant='primary')       
                 
         with gr.Accordion("Chunk text", open = False):
             with gr.Row():
-                chunking_method_rad = gr.Radio(value = "Chunk within title", choices = ["Chunk within title", "Basic chunking"], interactive=True)
+                chunk_within_docs_rad = gr.Radio(label="Chunk within documents", value = "No", choices = ["Yes", "No"], interactive=True)
+                chunking_method_rad = gr.Radio(label="Basic chunking or by title", value = "Chunk within title", choices = ["Chunk within title", "Basic chunking"], interactive=True)
                 multipage_sections_drop =gr.Dropdown(choices=["Yes", "No"], value = "Yes", label = "Continue chunk over page breaks.", interactive=True)
                 overlap_all_drop =gr.Dropdown(choices=["Yes", "No"], value = "Yes", label="Overlap over adjacent element text if needed.", interactive=True)
             with gr.Row():
-                minimum_chunk_length_slide = gr.Slider(value = minimum_chunk_length, minimum=100, maximum=10000, step = 100, label= "Minimum chunk character length. Chunk will overlap next title if character limit not reached.", interactive=True)
-                start_new_chunk_after_end_of_this_element_length_slide = gr.Slider(value = start_new_chunk_after_end_of_this_element_length, minimum=100, maximum=10000, step = 100, label = "'Soft' maximum chunk character length - chunk will continue until end of current element when length reached")
-                hard_max_character_length_chunks_slide = gr.Slider(value = hard_max_character_length_chunks, minimum=100, maximum=10000, step = 100, label = "'Hard' maximum chunk character length. Chunk will not be longer than this.", interactive=True)
+                minimum_chunk_length_slide = gr.Slider(value = minimum_chunk_length, minimum=100, maximum=max_chunk_length, step = 100, label= "Minimum chunk character length. Chunk will overlap next title if character limit not reached.", interactive=True)
+                start_new_chunk_after_end_of_this_element_length_slide = gr.Slider(value = start_new_chunk_after_end_of_this_element_length, minimum=100, maximum=max_chunk_length, step = 100, label = "'Soft' maximum chunk character length - chunk will continue until end of current element when length reached")
+                hard_max_character_length_chunks_slide = gr.Slider(value = hard_max_character_length_chunks, minimum=100, maximum=max_chunk_length, step = 100, label = "'Hard' maximum chunk character length. Chunk will not be longer than this.", interactive=True)
 
-            chunk_btn = gr.Button("Chunk document")
+            chunk_btn = gr.Button("Chunk document(s)", variant='primary')
 
         # Save chunked data to file
         with gr.Accordion("File outputs", open = True):
@@ -190,10 +193,11 @@ with block:
     then(fn=pre_clean, inputs=[elements_state, in_colnames_state, custom_regex_state, clean_text, output_name_state, anonymise_drop, anon_strat, anon_entities_drop], outputs=[output_summary, output_file, elements_state, output_name_state])
 
     ## Chunk data
-    chunk_btn.click(fn = chunk_all_elements, inputs=[elements_state, output_name_state, chunking_method_rad, minimum_chunk_length_slide, start_new_chunk_after_end_of_this_element_length_slide, hard_max_character_length_chunks_slide, multipage_sections_drop, overlap_all_drop], outputs=[output_summary, output_file, output_name_state])
+    chunk_btn.click(fn = chunk_all_elements, inputs=[elements_state, output_name_state, chunking_method_rad, minimum_chunk_length_slide, start_new_chunk_after_end_of_this_element_length_slide, hard_max_character_length_chunks_slide, multipage_sections_drop, overlap_all_drop, chunk_within_docs_rad], outputs=[output_summary, output_file, output_name_state])
     
     # Loading AWS data - not yet implemented in this app
     # load_aws_data_button.click(fn=load_data_from_aws, inputs=[in_aws_file, aws_password_box], outputs=[in_file, aws_log_box])
     
 # Simple run
-block.queue().launch(ssl_verify=False) # root_path="/address-match", debug=True, server_name="0.0.0.0", server_port=7861
+if __name__ == "__main__":
+    block.queue().launch(show_error=True, inbrowser=True)
